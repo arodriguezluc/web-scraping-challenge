@@ -1,157 +1,113 @@
-# Jupyter Notebook Conversion to Python Script
-
-# Dependencies and Setup
-from bs4 import BeautifulSoup
 from splinter import Browser
+from bs4 import BeautifulSoup as bs
+import time
 import pandas as pd
-import datetime as dt
+import pymongo
+import requests
 
-#################################################
-# Set Executable Path & Initialize Chrome Browser
-executable_path = {"executable_path": "C:/Users/arodr/Documents/bootcamp/nu-chi-data-pt-04-2021-u-c/web-scraping-challenge/Mission to Mars/chromedriver.exe"}
-browser = Browser("chrome", **executable_path)
+def init_browser():
+    executable_path = {"executable_path": "C:/Users/arodr/Documents/bootcamp/nu-chi-data-pt-04-2021-u-c/web-scraping-challenge/Mission to Mars/chromedriver.exe"}
+    return Browser("chrome", **executable_path, headless=False)
 
+def scrape_info():
+    browser = init_browser()
 
+    time.sleep(1)
 
-# Red Planet Science News
+    #mars news
 
-# Red Planet News Site Web Scraper
-def mars_news(browser):
-    # Visit the Red Planet News Site
-    url = "https://redplanetscience.com/"
-    browser.visit(url)
-
-    # Get First List Item & Wait Half a Second If Not Immediately Present
-    browser.is_element_present_by_css("ul.item_list li.slide", wait_time=0.5)
+    news_url = 'https://redplanetscience.com/'
+    browser.visit(news_url)
     
     html = browser.html
-    soup = BeautifulSoup(html, "html.parser")
+    soup = bs(html, 'html.parser')
 
-    # Parse Results HTML with BeautifulSoup
-    # Find Everything Inside:
-    #   <ul class="item_list">
-    #     <li class="slide">
-    try:
-        slide_element = soup.select_one("ul.item_list li.slide")
-        slide_element.find("div", class_="content_title")
+    news_title=soup.find("div",class_='content_title').text
 
-        # Scrape the Latest News Title
-        # Use Parent Element to Find First <a> Tag and Save it as news_title
-        news_title = slide_element.find("div", class_="content_title").get_text()
+    news_p=soup.find("div",class_='article_teaser_body').text
 
-        news_paragraph = slide_element.find("div", class_="article_teaser_body").get_text()
-    except AttributeError:
-        return None, None
-    return news_title, news_paragraph
+    #JPL Mars Space Images
 
-
-# JPL Mars Space Images - Featured Image
-# NASA JPL (Jet Propulsion Laboratory) Site Web Scraper
-def featured_image(browser):
-    # Visit the NASA JPL (Jet Propulsion Laboratory) Site
-    mars_featured_image_url = "https://d2pn8kiwq2w21t.cloudfront.net/images/jpegPIA24793.width-1600.jpg"
-    browser.visit(mars_featured_image_url)
-
-    # Ask Splinter to Go to Site and Click Button with Class Name full_image
-    # <button class="full_image">Full Image</button>
-    full_image_button = browser.find_by_id("full_image")
-    full_image_button.click()
-
-    # Find "More Info" Button and Click It
-    browser.is_element_present_by_text("more info", wait_time=1)
-    more_info_element = browser.find_link_by_partial_text("more info")
-    more_info_element.click()
-
-    # Parse Results HTML with BeautifulSoup
-    html = browser.html
-    image_soup = BeautifulSoup(html, "html.parser")
-
-    img = image_soup.select_one("figure.lede a img")
-    try:
-        img_url = img.get("src")
-    except AttributeError:
-        return None 
-   # Use Base URL to Create Absolute URL
-    img_url = f"https://redplanetscience.com/{img_url}"
-    return img_url
-
-# Mars Weather
-# Mars Weather Twitter Account Web Scraper
-def twitter_weather(browser):
-    # Visit the Mars Weather Twitter Account
-    url = "https://twitter.com/marswxreport?lang=en"
-    browser.visit(url)
-    
-    # Parse Results HTML with BeautifulSoup
-    html = browser.html
-    weather_soup = BeautifulSoup(html, "html.parser")
-    
-    # Find a Tweet with the data-name `Mars Weather`
-    mars_weather_tweet = weather_soup.find("div", 
-                                       attrs={
-                                           "class": "tweet", 
-                                            "data-name": "Mars Weather"
-                                        })
-   # Search Within Tweet for <p> Tag Containing Tweet Text
-    mars_weather = mars_weather_tweet.find("p", "tweet-text").get_text()
-    return mars_weather
-
-# Mars Facts
-# Mars Facts Web Scraper
-def mars_facts():
-    # Visit the Mars Facts Site Using Pandas to Read
-    try:
-        df = pd.read_html("https://galaxyfacts-mars.com/")[0]
-    except BaseException:
-        return None
-    df.columns=["Description", "Value"]
-    df.set_index("Description", inplace=True)
-
-    return df.to_html(classes="table table-striped")
-
-
-# Mars Hemispheres
-# Mars Hemispheres Web Scraper
-def hemisphere(browser):
-    # Visit Mars Hemispheres Site
-    url = "https://marshemispheres.com/"
+    url = 'https://spaceimages-mars.com/image/mars/Icaria%20Fossae7.jpg'
     browser.visit(url)
 
-    hemisphere_image_urls = []
+    html = browser.html
+    soup = bs(html, 'html.parser')
 
-    # Get a List of All the Hemisphere
-    links = browser.find_by_css("a.product-item h3")
-    for item in range(len(links)):
-        hemisphere = {}
-        
-        # Find Element on Each Loop to Avoid a Stale Element Exception
-        browser.find_by_css("a.product-item h3")[item].click()
-        
-        # Find Sample Image Anchor Tag & Extract <href>
-        sample_element = browser.find_link_by_text("Sample").first
-        hemisphere["img_url"] = sample_element["href"]
-        
-        # Get Hemisphere Title
-        hemisphere["title"] = browser.find_by_css("h2.title").text
-        
-        # Append Hemisphere Object to List
-        hemisphere_image_urls.append(hemisphere)
-        
-        # Navigate Backwards
-        browser.back()
-    return hemisphere_image_urls
+    stuff=soup.find('div',class_='carousel_container')
 
-# Helper Function
-def scrape_hemisphere(html_text):
-    hemisphere_soup = BeautifulSoup(html_text, "html.parser")
-    try: 
-        title_element = hemisphere_soup.find("h2", class_="title").get_text()
-        sample_element = hemisphere_soup.find("a", text="Sample").get("href")
-    except AttributeError:
-        title_element = None
-        sample_element = None 
-    hemisphere = {
-        "title": title_element,
-        "img_url": sample_element
+    image=stuff.a["data-fancybox-href"]
+
+    url="https://spaceimages-mars.com/"
+
+    featured_image_url = url + image
+
+    #Mars Weather
+
+    url = 'https://twitter.com/marswxreport?lang=en&lang=en&lang=en'
+    browser.visit(url)
+
+    html = browser.html
+    soup = bs(html, 'html.parser')
+
+    mars_weather=soup.find('p',class_='TweetTextSize TweetTextSize--normal js-tweet-text tweet-text').text
+
+    #Mars Facts
+    facts_url = 'https://galaxyfacts-mars.com/'
+    browser.visit(facts_url)
+
+    html=browser.html
+    soup=bs(html, 'html.parser')
+ 
+    tables = pd.read_html(facts_url)
+
+    mars_df=tables[1]
+    mars_df.columns=["description","value"]
+    mars_df.set_index("description",inplace=True)
+
+    mars_html_table=mars_df.to_html()
+    mars_html_table.replace('\n','')
+    
+
+    #Mars Hemispheres
+    url = 'https://astrogeology.usgs.gov/search/results?q=hemisphere+enhanced&k1=target&v1=Mars'
+    browser.visit(url)
+
+    html = browser.html
+    soup = bs(html, 'html.parser')
+
+    all_hemi1=soup.find("div",class_='collapsible results')
+
+    hemisphere1=all_hemi1.find_all('a')
+
+    hemisphere_image_urls=[]
+
+    for hemi in hemisphere1:
+        if hemi.h3:
+            title=hemi.h3.text
+            link=hemi["href"]
+            main_url="https://astrogeology.usgs.gov/"
+            forward_url=main_url+link
+            browser.visit(forward_url)
+            html = browser.html
+            soup = bs(html, 'html.parser')
+            hemi2=soup.find("div",class_= "downloads")
+            image=hemi2.ul.a["href"]
+            hemi_dict={}
+            hemi_dict["title"]=title
+            hemi_dict["img_url"]=image
+            hemisphere_image_urls.append(hemi_dict)
+            browser.back()
+
+
+    mars_py_dict={
+        "mars_news_title": news_title,
+        "mars_news_paragraph": news_p,
+        "featured_mars_image": featured_image_url,
+        "mars_weather": mars_weather,
+        "mars_facts": mars_html_table,
+        "mars_hemisphers": hemisphere_image_urls
     }
-    return hemisphere
+    browser.quit()
+
+    return mars_py_dict 
